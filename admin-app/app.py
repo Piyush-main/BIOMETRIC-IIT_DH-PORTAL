@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase import create_client
 import pandas as pd
-from datetime import date, timedelta ,timezone
+from datetime import date, timedelta
 import math
 import re
 from io import BytesIO
@@ -1221,11 +1221,9 @@ elif page == "⚙ Manage":
                     "course_code": new_code.strip().upper(),
                     "course_name": new_name.strip(),
                     "prof_id":     selected_prof_id.strip(),
-                    "created_at":  now_str, # Fixes missing timestamp constraint
-                    "updated_at":  now_str, # Fixes null value in updated_at constraint
                 }
                 if new_dept:
-                    payload["dept"] = new_dept
+                    payload["dept_code"] = new_dept
                 if new_semester.strip():
                     payload["semester"] = new_semester.strip()
                 if new_year:
