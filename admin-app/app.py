@@ -250,6 +250,42 @@ def clean(df):
 
 
 
+def fingerprint_status(val):
+    """
+    Returns 'sync' if the fingerprint template is missing/empty (not yet
+    enrolled on the scanner), otherwise returns None so the cell renders
+    blank for students whose fingerprint has already been captured.
+    """
+    if val is None:
+        return "sync"
+    try:
+        if isinstance(val, float) and pd.isna(val):
+            return "sync"
+    except TypeError:
+        pass
+    if isinstance(val, (bytes, bytearray)) and len(val) == 0:
+        return "sync"
+    if isinstance(val, str) and val.strip() == "":
+        return "sync"
+    return None
+
+
+def add_fingerprint_column(df, template_col="template", new_col="Fingerprint"):
+    """Adds a derived Fingerprint column (values: 'sync' or blank) based on
+    the raw `template` bytea column coming from Supabase. Safe no-op if the
+    template column isn't present in the given dataframe."""
+    if df is None or df.empty or template_col not in df.columns:
+        if df is not None and not df.empty and new_col not in df.columns:
+            df = df.copy()
+            df[new_col] = "sync"
+        return df
+    df = df.copy()
+    df[new_col] = df[template_col].apply(fingerprint_status)
+    return df
+
+
+
+
 @st.cache_data(ttl=60)
 def fetch_table(table_name):
     try:
@@ -528,7 +564,7 @@ elif page == "Attendance":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Students":
     st.header("Registered Students")
-    df = students_df.copy()
+    df = add_fingerprint_column(students_df.copy())
     if not df.empty:
         search = st.text_input("Search by Name or ID")
         if search:
@@ -546,7 +582,7 @@ elif page == "Students":
 elif page == "Professors":
     st.header("Faculty Members")
     if not profs_df.empty:
-        st.table(clean(profs_df))
+        st.table(clean(add_fingerprint_column(profs_df.copy())))
     else:
         st.info("No professor records found.")
 
@@ -696,6 +732,8 @@ elif page == "Att. Log":
 
 
             if stu_id_col_a and stu_id_col_s:
+                enrolled_students_df = add_fingerprint_column(enrolled_students_df)
+
                 if date_col:
                     course_att["_date"] = course_att[date_col].dt.date
                     per_stu = (course_att.groupby(stu_id_col_a)["_date"]
@@ -724,10 +762,10 @@ elif page == "Att. Log":
                         ]
 
 
-                orig_cols  = [c for c in students_df.columns if c not in HIDDEN_COLS]
+                orig_cols  = [c for c in students_df.columns if c not in HIDDEN_COLS] + ["Fingerprint"]
                 display_df = merged[orig_cols + ["Classes Attended"]].reset_index(drop=True)
             else:
-                display_df = clean(enrolled_students_df.copy()).reset_index(drop=True)
+                display_df = clean(add_fingerprint_column(enrolled_students_df.copy())).reset_index(drop=True)
 
 
             expander_label = (
@@ -960,7 +998,7 @@ elif page == "⚙ Manage":
 
         st.markdown('<div class="sec-header">Existing Students</div>', unsafe_allow_html=True)
         if not students_df.empty:
-            st.dataframe(clean(students_df), use_container_width=True)
+            st.dataframe(clean(add_fingerprint_column(students_df.copy())), use_container_width=True)
         else:
             st.info("No students in database yet.")
 
@@ -1133,7 +1171,7 @@ elif page == "⚙ Manage":
 
         st.markdown('<div class="sec-header">Existing Professors</div>', unsafe_allow_html=True)
         if not profs_df.empty:
-            st.dataframe(clean(profs_df), use_container_width=True)
+            st.dataframe(clean(add_fingerprint_column(profs_df.copy())), use_container_width=True)
         else:
             st.info("No professors in database yet.")
 
@@ -1611,7 +1649,7 @@ elif page == "⚙ Manage":
             last_col4   = next((c for c in ["last_name"] if c in students_df.columns), None)
 
 
-            del_display = clean(del_df.copy()).reset_index(drop=True)
+            del_display = clean(add_fingerprint_column(del_df.copy())).reset_index(drop=True)
             st.markdown(
                 f"<p style='color:#999;font-size:0.85rem;margin-bottom:0.4rem;'>"
                 f"Showing <strong>{len(del_display)}</strong> student(s). Select a row to delete.</p>",
