@@ -1142,109 +1142,109 @@ elif page == "⚙ Manage":
     # TAB 1 — ADD COURSE
     # ──────────────────────────────────────────────────────────────────────────
     with tab1:
-    st.markdown('<div class="sec-header">Add New Course</div>', unsafe_allow_html=True)
-    st.markdown(
-        "<p style='color:#999;font-size:0.85rem;margin-bottom:1rem;'>"
-        "Fill in the details below. Course Code must be unique.</p>",
-        unsafe_allow_html=True
-    )
-
-    with st.form("add_course_form", clear_on_submit=True):
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            new_code = st.text_input(
-                "Course Code *",
-                placeholder="e.g. CS301",
-                help="Unique identifier like CS301, EE202"
-            )
-            new_name = st.text_input(
-                "Course Name *",
-                placeholder="e.g. Data Structures & Algorithms"
-            )
-        with fc2:
-            # Build prof options from profs table
-            prof_options = {}
+        st.markdown('<div class="sec-header">Add New Course</div>', unsafe_allow_html=True)
+        st.markdown(
+            "<p style='color:#999;font-size:0.85rem;margin-bottom:1rem;'>"
+            "Fill in the details below. Course Code must be unique.</p>",
+            unsafe_allow_html=True
+        )
+    
+        with st.form("add_course_form", clear_on_submit=True):
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                new_code = st.text_input(
+                    "Course Code *",
+                    placeholder="e.g. CS301",
+                    help="Unique identifier like CS301, EE202"
+                )
+                new_name = st.text_input(
+                    "Course Name *",
+                    placeholder="e.g. Data Structures & Algorithms"
+                )
+            with fc2:
+                # Build prof options from profs table
+                prof_options = {}
+                if not profs_df.empty:
+                    pid_col = next((c for c in ["prof_id", "id"] if c in profs_df.columns), None)
+                    pnm_col = next((c for c in ["name", "prof_name", "full_name"] if c in profs_df.columns), None)
+                    if pid_col and pnm_col:
+                        for _, pr in profs_df.iterrows():
+                            prof_options[f"{pr[pnm_col]} ({pr[pid_col]})"] = str(pr[pid_col])
+    
+                if prof_options:
+                    selected_prof_label = st.selectbox(
+                        "Professor *",
+                        options=list(prof_options.keys()),
+                        help="Select the professor who will teach this course"
+                    )
+                    selected_prof_id = prof_options[selected_prof_label]
+                else:
+                    st.warning("No professors found in the database. Please add professors first.")
+                    selected_prof_id = st.text_input("Professor ID (manual)", placeholder="e.g. PROF001")
+                    selected_prof_label = selected_prof_id
+    
+                # Department field
+                dept_options2 = ["CS", "EE", "MC", "ME", "CH", "CE", ""]
+                new_dept = st.selectbox("Department (optional)", options=dept_options2, index=len(dept_options2)-1)
+    
+            submitted = st.form_submit_button("➕ Add Course", use_container_width=True, type="primary")
+    
+        if submitted:
+            # Validate required fields
+            errors = []
+            if not new_code.strip():
+                errors.append("Course Code is required.")
+            if not new_name.strip():
+                errors.append("Course Name is required.")
+            if not selected_prof_id or not selected_prof_id.strip():
+                errors.append("Professor is required.")
+    
+            # Check duplicate course code
+            if not courses_df.empty and new_code.strip() in courses_df["course_code"].astype(str).values:
+                errors.append(f"Course Code **{new_code.strip()}** already exists.")
+    
+            if errors:
+                for e in errors:
+                    st.error(e)
+            else:
+                now_str = datetime.now().isoformat()
+                payload = {  
+                    "course_code": new_code.strip().upper(),
+                    "course_name": new_name.strip(),
+                    "prof_id":     selected_prof_id.strip(),
+                    "created_at":  now_str, # Fixes missing timestamp constraint
+                    "updated_at":  now_str,
+                }
+                if new_dept:
+                    payload["dept"] = new_dept
+    
+                try:
+                    result = supabase.table("courses").insert(payload).execute()
+                    if result.data:
+                        st.success(
+                            f"✅ Course **{new_code.strip().upper()} — {new_name.strip()}** "
+                            f"added successfully with Prof. {selected_prof_label}!"
+                        )
+                        fetch_table.clear()
+                    else:
+                        st.error("Insert failed. No data returned from Supabase.")
+                except Exception as ex:
+                    st.error(f"Error adding course: {ex}")
+    
+        # Show current courses
+        st.markdown('<div class="sec-header">Existing Courses</div>', unsafe_allow_html=True)
+        if not courses_df.empty:
+            display_courses = clean(courses_df.copy())
+            # Resolve prof_id to name for display
             if not profs_df.empty:
                 pid_col = next((c for c in ["prof_id", "id"] if c in profs_df.columns), None)
                 pnm_col = next((c for c in ["name", "prof_name", "full_name"] if c in profs_df.columns), None)
-                if pid_col and pnm_col:
-                    for _, pr in profs_df.iterrows():
-                        prof_options[f"{pr[pnm_col]} ({pr[pid_col]})"] = str(pr[pid_col])
-
-            if prof_options:
-                selected_prof_label = st.selectbox(
-                    "Professor *",
-                    options=list(prof_options.keys()),
-                    help="Select the professor who will teach this course"
-                )
-                selected_prof_id = prof_options[selected_prof_label]
-            else:
-                st.warning("No professors found in the database. Please add professors first.")
-                selected_prof_id = st.text_input("Professor ID (manual)", placeholder="e.g. PROF001")
-                selected_prof_label = selected_prof_id
-
-            # Department field
-            dept_options2 = ["CS", "EE", "MC", "ME", "CH", "CE", ""]
-            new_dept = st.selectbox("Department (optional)", options=dept_options2, index=len(dept_options2)-1)
-
-        submitted = st.form_submit_button("➕ Add Course", use_container_width=True, type="primary")
-
-    if submitted:
-        # Validate required fields
-        errors = []
-        if not new_code.strip():
-            errors.append("Course Code is required.")
-        if not new_name.strip():
-            errors.append("Course Name is required.")
-        if not selected_prof_id or not selected_prof_id.strip():
-            errors.append("Professor is required.")
-
-        # Check duplicate course code
-        if not courses_df.empty and new_code.strip() in courses_df["course_code"].astype(str).values:
-            errors.append(f"Course Code **{new_code.strip()}** already exists.")
-
-        if errors:
-            for e in errors:
-                st.error(e)
+                if pid_col and pnm_col and "prof_id" in display_courses.columns:
+                    prof_id_to_name = dict(zip(profs_df[pid_col].astype(str), profs_df[pnm_col].astype(str)))
+                    display_courses["professor"] = display_courses["prof_id"].astype(str).map(prof_id_to_name).fillna(display_courses["prof_id"])
+            st.dataframe(display_courses, use_container_width=True)
         else:
-            now_str = datetime.now().isoformat()
-            payload = {  
-                "course_code": new_code.strip().upper(),
-                "course_name": new_name.strip(),
-                "prof_id":     selected_prof_id.strip(),
-                "created_at":  now_str, # Fixes missing timestamp constraint
-                "updated_at":  now_str,
-            }
-            if new_dept:
-                payload["dept"] = new_dept
-
-            try:
-                result = supabase.table("courses").insert(payload).execute()
-                if result.data:
-                    st.success(
-                        f"✅ Course **{new_code.strip().upper()} — {new_name.strip()}** "
-                        f"added successfully with Prof. {selected_prof_label}!"
-                    )
-                    fetch_table.clear()
-                else:
-                    st.error("Insert failed. No data returned from Supabase.")
-            except Exception as ex:
-                st.error(f"Error adding course: {ex}")
-
-    # Show current courses
-    st.markdown('<div class="sec-header">Existing Courses</div>', unsafe_allow_html=True)
-    if not courses_df.empty:
-        display_courses = clean(courses_df.copy())
-        # Resolve prof_id to name for display
-        if not profs_df.empty:
-            pid_col = next((c for c in ["prof_id", "id"] if c in profs_df.columns), None)
-            pnm_col = next((c for c in ["name", "prof_name", "full_name"] if c in profs_df.columns), None)
-            if pid_col and pnm_col and "prof_id" in display_courses.columns:
-                prof_id_to_name = dict(zip(profs_df[pid_col].astype(str), profs_df[pnm_col].astype(str)))
-                display_courses["professor"] = display_courses["prof_id"].astype(str).map(prof_id_to_name).fillna(display_courses["prof_id"])
-        st.dataframe(display_courses, use_container_width=True)
-    else:
-        st.info("No courses in database yet.")
+            st.info("No courses in database yet.")
 
 
     # ──────────────────────────────────────────────────────────────────────────
