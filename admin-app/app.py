@@ -2,11 +2,10 @@ import streamlit as st
 from supabase import create_client
 import pandas as pd
 import datetime
-from datetime import date, timedelta,timezone
+from datetime import datetime, date, timedelta, timezone  # <--- Added datetime class here
 import math
 import re
 from io import BytesIO
-
 
 
 
