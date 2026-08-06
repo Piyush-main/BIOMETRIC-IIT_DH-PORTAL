@@ -248,6 +248,15 @@ def clean(df):
     return df.drop(columns=drop, errors="ignore")
 
 
+def with_sync_status(df, col="template", label="Sync Status"):
+    """Return a copy of df with a human-readable Sync Status column derived
+    from the raw `template` column (NULL -> Not Synced, else -> Synced)."""
+    df = df.copy()
+    if col in df.columns:
+        df[label] = df[col].apply(lambda v: "Synced" if v is not None else "Not Synced")
+    return df
+
+
 
 
 @st.cache_data(ttl=60)
@@ -533,7 +542,7 @@ elif page == "Students":
         search = st.text_input("Search by Name or ID")
         if search:
             df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
-        st.dataframe(clean(df), use_container_width=True)
+        st.dataframe(clean(with_sync_status(df)), use_container_width=True)
     else:
         st.info("No students enrolled yet.")
 
@@ -546,7 +555,7 @@ elif page == "Students":
 elif page == "Professors":
     st.header("Faculty Members")
     if not profs_df.empty:
-        st.table(clean(profs_df))
+        st.table(clean(with_sync_status(profs_df)))
     else:
         st.info("No professor records found.")
 
