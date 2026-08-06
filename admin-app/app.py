@@ -253,7 +253,7 @@ def with_sync_status(df, col="template", label="Sync Status"):
     from the raw `template` column (NULL -> Not Synced, else -> Synced)."""
     df = df.copy()
     if col in df.columns:
-        df[label] = df[col].apply(lambda v: "Synced" if v is not None else "Not Synced")
+        df[label] = df[col].apply(lambda v: "Not Synced" if pd.isna(v) else "Synced")
     return df
 
 
