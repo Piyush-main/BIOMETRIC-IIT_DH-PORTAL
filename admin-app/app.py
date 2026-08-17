@@ -733,12 +733,26 @@ elif page == "Att. Log":
             info        = course_lookup.get(code, {"name": course_name, "prof": "—"})
             prof_name   = info.get("prof", "—") or "—"
             course_att  = attendance_df[attendance_df["course_code"] == code].copy()
+            if date_col:
+                course_att["_date"] = course_att[date_col].dt.date
 
 
             if date_col:
-                total_classes = course_att[date_col].dt.date.nunique()
+                total_classes = course_att["_date"].nunique()
             else:
                 total_classes = len(course_att)
+
+
+            # Session date columns + a lookup of which (student_id, date) pairs
+            # attended, used to build Present/Absent columns for every student
+            # at once in the roster table below.
+            session_date_map = {}
+            attended_pairs = set()
+            if date_col and stu_id_col_a and not course_att.empty:
+                session_dates_all = sorted(course_att["_date"].dropna().unique())
+                attended_pairs = set(zip(course_att[stu_id_col_a].astype(str), course_att["_date"]))
+                session_date_map = {d.strftime("%d %b %Y"): d for d in session_dates_all}
+            session_date_cols = list(session_date_map.keys())
 
 
             if not enrollments_df.empty and "course_code" in enrollments_df.columns and "student_id" in enrollments_df.columns:
@@ -772,6 +786,13 @@ elif page == "Att. Log":
                 merged["Classes Attended"] = merged["Classes Attended"].fillna(0).astype(int)
 
 
+                # One Present/Absent column per session date, for every student
+                for col_name, d in session_date_map.items():
+                    merged[col_name] = merged[stu_id_col_s].astype(str).apply(
+                        lambda sid, d=d: "Present" if (sid, d) in attended_pairs else "Absent"
+                    )
+
+
                 if search_query and search_type in ("Student Name", "Student ID"):
                     q = search_query.strip().lower()
                     if search_type == "Student Name" and name_col_s:
@@ -785,7 +806,7 @@ elif page == "Att. Log":
 
 
                 orig_cols  = [c for c in students_df.columns if c not in HIDDEN_COLS]
-                display_df = merged[orig_cols + ["Classes Attended"]].reset_index(drop=True)
+                display_df = merged[orig_cols + ["Classes Attended"] + session_date_cols].reset_index(drop=True)
             else:
                 display_df = clean(enrolled_students_df.copy()).reset_index(drop=True)
 
@@ -818,8 +839,19 @@ elif page == "Att. Log":
                 if display_df.empty:
                     st.info("No students match your search for this course." if search_query else "No students enrolled.")
                     continue
+                if session_date_cols:
+                    def _color_present_absent(val):
+                        if val == "Present":
+                            return "color:#22c55e;font-weight:600;"
+                        if val == "Absent":
+                            return "color:#ef4444;font-weight:600;"
+                        return ""
+                    table_to_show = display_df.style.applymap(_color_present_absent, subset=session_date_cols)
+                else:
+                    table_to_show = display_df
+
                 event = st.dataframe(
-                    display_df,
+                    table_to_show,
                     use_container_width=True,
                     on_select="rerun",
                     selection_mode="single-row",
@@ -841,7 +873,7 @@ elif page == "Att. Log":
                         st.markdown(f"**Student ID:** `{stu_id}`")
                         if name_col_s:
                             st.markdown(f"**Name:** {stu_name}")
-                        skip_cols = {id_col, name_col_s, "Classes Attended"} | HIDDEN_COLS
+                        skip_cols = {id_col, name_col_s, "Classes Attended"} | HIDDEN_COLS | set(session_date_cols)
                         for col in stu_row.index:
                             if col not in skip_cols and pd.notna(stu_row[col]) and str(stu_row[col]).strip():
                                 st.markdown(f"**{col.replace('_',' ').title()}:** {stu_row[col]}")
