@@ -846,7 +846,11 @@ elif page == "Att. Log":
                         if val == "Absent":
                             return "color:#ef4444;font-weight:600;"
                         return ""
-                    table_to_show = display_df.style.applymap(_color_present_absent, subset=session_date_cols)
+                    styler = display_df.style
+                    if hasattr(styler, "map"):
+                        table_to_show = styler.map(_color_present_absent, subset=session_date_cols)
+                    else:
+                        table_to_show = styler.applymap(_color_present_absent, subset=session_date_cols)
                 else:
                     table_to_show = display_df
 
