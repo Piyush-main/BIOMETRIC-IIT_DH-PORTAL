@@ -331,6 +331,44 @@ def activity_ring_html(attended, total, student_label=""):
     </div>"""
 
 
+def session_attendance_table_html(session_rows, present_count, total_count):
+    """Build a dark-themed HTML table listing each session date with the
+    student's Present/Absent status, plus a totals footer row."""
+    rows_html = ""
+    for r in session_rows:
+        color = "#22c55e" if r["Status"] == "Present" else "#ef4444"
+        dot   = "●" if r["Status"] == "Present" else "○"
+        rows_html += f"""
+        <tr>
+          <td style="padding:7px 14px;color:#e5e5e5;font-family:'JetBrains Mono',monospace;font-size:0.8rem;border-bottom:1px solid #202020;">{r['Session Date']}</td>
+          <td style="padding:7px 14px;border-bottom:1px solid #202020;">
+            <span style="color:{color};font-weight:600;font-size:0.8rem;font-family:'JetBrains Mono',monospace;">{dot}&nbsp; {r['Status']}</span>
+          </td>
+        </tr>"""
+    pct = round((present_count / total_count) * 100, 1) if total_count > 0 else 0
+    pct_color = "#22c55e" if pct >= 75 else ("#eab308" if pct >= 50 else "#ef4444")
+    return f"""
+    <div style="background:#0d0d0d;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;font-family:'Sora',sans-serif;max-height:340px;display:flex;flex-direction:column;">
+      <div style="overflow-y:auto;max-height:280px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#141414;position:sticky;top:0;">
+              <th style="text-align:left;padding:8px 14px;color:#999999;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;">Session Date</th>
+              <th style="text-align:left;padding:8px 14px;color:#999999;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows_html}
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#141414;border-top:1.5px solid #2a2a2a;padding:10px 14px;">
+        <span style="color:#ffffff;font-weight:700;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;">Total Attendance</span>
+        <span style="color:{pct_color};font-weight:700;font-size:0.9rem;font-family:'JetBrains Mono',monospace;">{present_count} / {total_count} &nbsp;·&nbsp; {pct}%</span>
+      </div>
+    </div>"""
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -801,6 +839,31 @@ elif page == "Att. Log":
                             st.warning(f"**{pct}%** — At Risk")
                         else:
                             st.error(f"**{pct}%** — Below Threshold")
+
+                    # ── Session-wise breakdown for this student, with a
+                    #    total-attendance row at the end ─────────────────────
+                    st.markdown('<div class="sec-header">Attendance by Session</div>', unsafe_allow_html=True)
+                    if date_col and stu_id_col_a:
+                        session_dates = sorted(course_att[date_col].dt.date.dropna().unique())
+                        student_attended_dates = set(
+                            course_att.loc[
+                                course_att[stu_id_col_a].astype(str) == str(stu_id), date_col
+                            ].dt.date.dropna().unique()
+                        )
+                        session_rows = [
+                            {
+                                "Session Date": d.strftime("%d %b %Y"),
+                                "Status": "Present" if d in student_attended_dates else "Absent",
+                            }
+                            for d in session_dates
+                        ]
+                        present_count = sum(1 for r in session_rows if r["Status"] == "Present")
+                        st.markdown(
+                            session_attendance_table_html(session_rows, present_count, len(session_rows)),
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.info("Session dates are not available for this course's attendance records.")
 
 
 
